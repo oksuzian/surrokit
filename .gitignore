@@ -1,3 +1,6 @@
 __pycache__/
 *.egg-info/
 .venv/
+
+# artifacts written by examples/gp_map.py
+gp_map_*.png
