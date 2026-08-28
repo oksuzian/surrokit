@@ -9,8 +9,12 @@ minimize, log to tame dynamic range) and keep their units to themselves.
 
 ## Install
 
-Python >= 3.11 (botorch >= 0.18 requires it — an older interpreter fails
-with `No matching distribution found for botorch>=0.18`).
+Python >= 3.11 (botorch >= 0.18 requires it). Check with `pip --version`
+— it prints the interpreter it belongs to. An older one fails with
+`No matching distribution found for botorch>=0.18`: older pip does not
+enforce our `requires-python` for a direct git URL, so it reports the
+dependency, not the real cause. Use a 3.11+ interpreter's pip
+(`<python3.11+> -m pip install ...`).
 
 ```bash
 pip install "git+https://github.com/oksuzian/surrokit"                # engine
