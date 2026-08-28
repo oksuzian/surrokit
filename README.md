@@ -96,5 +96,9 @@ Real-world example: [Mu2eBO](https://github.com/Mu2e/Mu2eBO)'s
 `surrogate/adapter.py` + `surrogate/mcp_server.py` serve its BO
 leaderboards (7 detector-geometry search spaces) exactly this way.
 
+`examples/gp_map.py` is a ready-made client: point it at any such
+server and it Sobol-sweeps the box through the `predict` tool and
+renders the GP's trade-off map (axis 1 vs axis 0, colored by sigma).
+
 Library discipline: no prints (logger `"surrokit"`), no env reads, no
 `sys.exit` — `InfeasibleError` / `NotEnoughData` / `ValueError` instead.
