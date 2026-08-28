@@ -126,8 +126,23 @@ def _qnehvi(model, X, Y, bounds, q: int, seed: int, pending=None):
 
 
 def _qlnei(model, X, bounds, q: int, seed: int, pending=None):
-    """qLogNoisyExpectedImprovement over axis 0 only."""
+    """qLogNoisyExpectedImprovement over axis 0 only.
+
+    botorch's single-objective MC acquisition functions refuse a bare
+    multi-output model (UnsupportedError: "Must specify an objective or
+    a posterior transform") -- they need to know which axis is "the"
+    objective. A weights=[1, 0, ..., 0] posterior transform selects
+    axis 0 and is a no-op for m=1 (single-output), so this never
+    changes single-output behavior.
+    """
     from botorch.acquisition.logei import qLogNoisyExpectedImprovement
+    from botorch.acquisition.objective import ScalarizedPosteriorTransform
+
+    m = model.num_outputs
+    transform = (ScalarizedPosteriorTransform(
+        weights=torch.tensor([1.0] + [0.0] * (m - 1), dtype=X.dtype,
+                             device=X.device))
+        if m > 1 else None)
 
     acq = qLogNoisyExpectedImprovement(
         model=model,
@@ -135,6 +150,7 @@ def _qlnei(model, X, bounds, q: int, seed: int, pending=None):
         sampler=sampler(seed),
         prune_baseline=True,
         X_pending=pending,
+        posterior_transform=transform,
     )
     return optimize_acq(acq, bounds, q)
 
