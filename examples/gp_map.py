@@ -24,13 +24,19 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 
 
 async def fetch(cmd, problem, n, chunk=500):
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
-    params = StdioServerParameters(command=cmd[0], args=cmd[1:])
+    # Forward our environment: the MCP stdio client otherwise starts the
+    # server with a stripped env (HOME/PATH/SHELL/TERM/USER only), so a
+    # PYTHONPATH-based checkout would fail to import surrokit and surface
+    # only as an opaque "Connection closed".
+    params = StdioServerParameters(command=cmd[0], args=cmd[1:],
+                                   env=dict(os.environ))
     async with stdio_client(params) as (r, w):
         async with ClientSession(r, w) as s:
             await s.initialize()

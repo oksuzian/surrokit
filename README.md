@@ -9,10 +9,15 @@ minimize, log to tame dynamic range) and keep their units to themselves.
 
 ## Install
 
+Python >= 3.10.
+
 ```bash
-pip install "git+https://github.com/oksuzian/surrokit"   # or a checkout
-pip install "surrokit[mcp]"                              # + MCP scaffold
+pip install "git+https://github.com/oksuzian/surrokit"                # engine
+pip install "surrokit[mcp] @ git+https://github.com/oksuzian/surrokit"  # + MCP scaffold
 ```
+
+Or from a checkout: `pip install -e ".[mcp]"`. (Not on PyPI yet, so the
+plain `pip install surrokit` form does not work.)
 
 ## Minimize a metric under a budget (5 lines of client code)
 
