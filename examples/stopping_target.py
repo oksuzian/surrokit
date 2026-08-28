@@ -31,6 +31,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo checkout
 
+from _quiet import silence_third_party  # noqa: E402
+
+silence_third_party()
+
 from surrokit import Constraint, InfeasibleError, Problem, ask, fit, predict
 
 DATA = Path(__file__).resolve().parent / "data" / "stopping_target_foilspf.csv"

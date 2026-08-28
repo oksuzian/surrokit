@@ -11,6 +11,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo checkout
+
+from _quiet import silence_third_party  # noqa: E402
+
+silence_third_party()
 from surrokit import Problem
 from surrokit.mcp_scaffold import make_server
 

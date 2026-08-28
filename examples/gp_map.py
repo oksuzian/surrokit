@@ -25,6 +25,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo checkout
+
+from _quiet import silence_third_party  # noqa: E402
+
+silence_third_party()
 
 
 async def fetch(cmd, problem, n, chunk=500):
