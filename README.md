@@ -20,6 +20,7 @@ Maximize objective `f`, keep metric `g <= budget` — feed the engine
 `-log10(g)` and constrain it above `-log10(budget)`:
 
 ```python
+import math
 from surrokit import Problem, Constraint, ask
 prob = Problem(bounds_lo=(0, 0), bounds_hi=(1, 10),
                constraint=Constraint(axis=1, min=-math.log10(budget)))

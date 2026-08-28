@@ -44,6 +44,18 @@ class TestFit(unittest.TestCase):
         n = model.likelihood.noise.detach()
         self.assertLess(float(n.max()), 0.1)
 
+    def test_pinned_noise_roundtrip_exact(self):
+        X, Y = history(10)
+        model = fit(PROB, X, Y)
+        m = 2
+        noise_t = model.likelihood.noise.detach()
+        noise_std = (noise_t.reshape(-1) if noise_t.numel() == m
+                     else noise_t.reshape(m, -1)[:, 0]).sqrt()
+        stdvs = model.outcome_transform.stdvs.detach().reshape(-1)
+        raw = (noise_std * stdvs).tolist()
+        for i, declared in enumerate(PROB.noise):
+            self.assertAlmostEqual(raw[i], declared, places=6)
+
     def test_free_noise_when_none(self):
         X, Y = history(10)
         p = Problem(bounds_lo=(0.0, 0.0), bounds_hi=(1.0, 10.0))
