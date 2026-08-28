@@ -92,5 +92,9 @@ x=[0.5, 5]", or "suggest 5 new points with picker qlnei, seed 7" —
 all pure computation over the history your adapter serves; nothing is
 submitted or written anywhere.
 
+Real-world example: [Mu2eBO](https://github.com/Mu2e/Mu2eBO)'s
+`surrogate/adapter.py` + `surrogate/mcp_server.py` serve its BO
+leaderboards (7 detector-geometry search spaces) exactly this way.
+
 Library discipline: no prints (logger `"surrokit"`), no env reads, no
 `sys.exit` — `InfeasibleError` / `NotEnoughData` / `ValueError` instead.
