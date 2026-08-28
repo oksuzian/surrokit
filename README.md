@@ -100,5 +100,13 @@ leaderboards (7 detector-geometry search spaces) exactly this way.
 server and it Sobol-sweeps the box through the `predict` tool and
 renders the GP's trade-off map (axis 1 vs axis 0, colored by sigma).
 
+Fully self-contained demos (no client repo needed):
+
+```bash
+python examples/bo_loop.py            # ask/tell loop finds a toy optimum
+python examples/gp_map.py --problem toy \
+    --cmd python examples/toy_server.py   # GP map over a toy MCP server
+```
+
 Library discipline: no prints (logger `"surrokit"`), no env reads, no
 `sys.exit` — `InfeasibleError` / `NotEnoughData` / `ValueError` instead.
