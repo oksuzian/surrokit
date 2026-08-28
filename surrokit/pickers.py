@@ -209,6 +209,10 @@ def ask(problem: Problem, X, Y, q: int = 5, picker: str = "hybrid",
     if picker not in PICKER_CHOICES:
         raise ValueError(f"unknown picker {picker!r}; choose from "
                          f"{PICKER_CHOICES}")
+    # Stateless determinism: pin torch's global stream too -- ambient
+    # state otherwise leaks into fit_gpytorch_mll and optimize_acqf's
+    # initial-condition/retry draws, making identical calls diverge.
+    torch.manual_seed(seed)
     bounds = bounds_tensor(problem)
     Xt = (to_f64(X) if len(X)
           else torch.empty((0, problem.dim), dtype=torch.float64))
