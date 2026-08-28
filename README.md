@@ -9,7 +9,8 @@ minimize, log to tame dynamic range) and keep their units to themselves.
 
 ## Install
 
-Python >= 3.10.
+Python >= 3.11 (botorch >= 0.18 requires it — an older interpreter fails
+with `No matching distribution found for botorch>=0.18`).
 
 ```bash
 pip install "git+https://github.com/oksuzian/surrokit"                # engine
@@ -18,6 +19,13 @@ pip install "surrokit[mcp] @ git+https://github.com/oksuzian/surrokit"  # + MCP 
 
 Or from a checkout: `pip install -e ".[mcp]"`. (Not on PyPI yet, so the
 plain `pip install surrokit` form does not work.)
+
+If your environment already ships botorch/torch (e.g. a conda or lab
+analysis env), install the package alone and keep the env's own stack:
+
+```bash
+python -m pip install --no-deps "git+https://github.com/oksuzian/surrokit"
+```
 
 ## Minimize a metric under a budget (5 lines of client code)
 
