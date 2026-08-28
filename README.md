@@ -31,6 +31,22 @@ analysis env), install the package alone and keep the env's own stack:
 python -m pip install --no-deps "git+https://github.com/oksuzian/surrokit"
 ```
 
+On Mu2e/FNAL machines that env is `ana 2.8.0` on cvmfs (Python 3.12,
+botorch 0.18.1) — the login shell's default `python`/`pip` are 3.9 and
+cannot install botorch at all:
+
+```bash
+source /cvmfs/mu2e.opensciencegrid.org/setupmu2e-art.sh
+pyenv ana 2.8.0                    # ALWAYS name the version: bare `pyenv ana` is 2.7.0
+python -m pip install --no-deps "git+https://github.com/oksuzian/surrokit"
+```
+
+In a shell that also launches Mu2e jobs, use the interpreter path
+(`/cvmfs/mu2e.opensciencegrid.org/env/ana/2.8.0/bin/python`) instead of
+activating: `pyenv` exports `python`/`pip` wrappers that re-prepend the
+env's site-packages and libs into every child process, which shadows
+muse's ROOT.
+
 ## Minimize a metric under a budget (5 lines of client code)
 
 Maximize objective `f`, keep metric `g <= budget` — feed the engine
