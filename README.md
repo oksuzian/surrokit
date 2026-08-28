@@ -44,5 +44,53 @@ picks = ask(prob, X, Y, q=5, picker="constrained_max", seed=run_seed)
   `predict`, `suggest`, `stats`, `refit`; `middleware=` forwards to
   `MCPServer`.
 
+## Serve your problems over MCP
+
+Implement the two-method `Adapter` protocol and hand it to
+`make_server` — you get an MCP server whose tools (`list_problems`,
+`predict`, `suggest`, `stats`, `refit`) any MCP client (Claude Code,
+Claude Desktop, ...) can call:
+
+```python
+# my_server.py
+from surrokit import Problem
+from surrokit.mcp_scaffold import make_server
+
+class MyAdapter:
+    def problems(self):
+        # name -> search space
+        return {"toy": Problem(bounds_lo=(0.0, 0.0), bounds_hi=(1.0, 10.0))}
+
+    def history(self, name):
+        # observed rows for `name`: X (n, d), Y (n, m) — every axis
+        # maximized — plus free-form metadata served by stats()
+        X = [[0.2, 3.0], [0.8, 7.0]]
+        Y = [[1.1, 2.5], [1.4, 2.1]]
+        return X, Y, {"objectives": ["f", "-log10(g)"]}
+
+server = make_server(MyAdapter(), name="my-surrogate")
+
+if __name__ == "__main__":
+    server.run("stdio")
+```
+
+Register it with an MCP client (e.g. a Claude Code `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "my-surrogate": {
+      "command": "python",
+      "args": ["/path/to/my_server.py"]
+    }
+  }
+}
+```
+
+The client can then ask things like "list the problems", "predict at
+x=[0.5, 5]", or "suggest 5 new points with picker qlnei, seed 7" —
+all pure computation over the history your adapter serves; nothing is
+submitted or written anywhere.
+
 Library discipline: no prints (logger `"surrokit"`), no env reads, no
 `sys.exit` — `InfeasibleError` / `NotEnoughData` / `ValueError` instead.
