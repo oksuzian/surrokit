@@ -9,9 +9,14 @@ import logging
 
 import torch
 
-from .problem import Constraint, InfeasibleError
+from .gp import _fit_model, bounds_tensor, to_f64
+from .problem import Constraint, InfeasibleError, Problem
+from .sampling import (ACQ_NUM_RESTARTS, ACQ_OPTIONS, ACQ_RAW_SAMPLES,
+                       emit_picks, optimize_acq, sampler, sobol_cold_start)
 
 log = logging.getLogger("surrokit")
+
+PICKER_CHOICES = ("qnehvi", "qlnei", "qnparego", "hybrid", "constrained_max")
 
 
 def _constrained_max(model, bounds, q: int, seed: int, pending,
@@ -91,3 +96,161 @@ def _constrained_max(model, bounds, q: int, seed: int, pending,
              "%.3f-%.3f", n_feas, pool, used_k, ax, thr, len(sel),
              float(obj[sel].min()), float(obj[sel].max()))
     return Xs[sel].detach()
+
+
+def _qnehvi(model, X, Y, bounds, q: int, seed: int, pending=None):
+    """qLogNEHVI (log-stabilized qNEHVI, Ament 2023) for q candidates.
+
+    pending: optional (k, d) in-flight rows; the acqf fantasizes over
+    them so replacements don't re-pick a running point.
+    """
+    from botorch.acquisition.multi_objective.logei import (
+        qLogNoisyExpectedHypervolumeImprovement,
+    )
+
+    # Ref point = observed nadir pushed out 10% of span; subtract the
+    # offset (sign-robust -- "x 1.1" only works when nadir is negative).
+    nadir = Y.min(dim=0).values
+    span = (Y.max(dim=0).values - nadir).abs().clamp(min=1e-9)
+    ref_point = (nadir - 0.1 * span).tolist()
+
+    acq = qLogNoisyExpectedHypervolumeImprovement(
+        model=model,
+        ref_point=ref_point,
+        X_baseline=X,
+        sampler=sampler(seed),
+        prune_baseline=True,
+        X_pending=pending,
+    )
+    return optimize_acq(acq, bounds, q)
+
+
+def _qlnei(model, X, bounds, q: int, seed: int, pending=None):
+    """qLogNoisyExpectedImprovement over axis 0 only."""
+    from botorch.acquisition.logei import qLogNoisyExpectedImprovement
+
+    acq = qLogNoisyExpectedImprovement(
+        model=model,
+        X_baseline=X,
+        sampler=sampler(seed),
+        prune_baseline=True,
+        X_pending=pending,
+    )
+    return optimize_acq(acq, bounds, q)
+
+
+def _qnparego(model, X, Y, bounds, q: int, seed: int, pending=None):
+    """qNParEGO: qLogNEI over a fresh random Chebyshev scalarization per
+    candidate -- fans the batch across the WHOLE front.
+
+    Seed discipline: weights drawn inside ONE torch.manual_seed(seed)
+    block -- DISTINCT per candidate, REPRODUCIBLE per seed.
+    Sequential-greedy via a growing pending set; can't use the shared
+    optimize_acq (per-candidate scalarization). pending rows are
+    conditioned on but NOT returned.
+    """
+    from botorch.acquisition.logei import qLogNoisyExpectedImprovement
+    from botorch.acquisition.objective import GenericMCObjective
+    from botorch.utils.multi_objective.scalarization import (
+        get_chebyshev_scalarization,
+    )
+    from botorch.utils.sampling import sample_simplex
+    from botorch.optim import optimize_acqf
+
+    torch.manual_seed(seed)
+    pend = [pending] if pending is not None else []
+    picks = []
+    for _ in range(q):
+        w = sample_simplex(d=Y.shape[-1], n=1, dtype=Y.dtype).squeeze(0)
+        obj = GenericMCObjective(get_chebyshev_scalarization(weights=w, Y=Y))
+        acq = qLogNoisyExpectedImprovement(
+            model=model, X_baseline=X, sampler=sampler(seed),
+            objective=obj, prune_baseline=True,
+            X_pending=torch.cat(pend) if pend else None,
+        )
+        cand, _ = optimize_acqf(
+            acq_function=acq, bounds=bounds, q=1,
+            num_restarts=ACQ_NUM_RESTARTS, raw_samples=ACQ_RAW_SAMPLES,
+            options=dict(ACQ_OPTIONS),
+        )
+        pend.append(cand)
+        picks.append(cand)
+    return torch.cat(picks).detach()
+
+
+def _hybrid(model, X, Y, bounds, q: int, seed: int, pending=None,
+            hv_frac: float = 0.6):
+    """One batch = hv_frac qnehvi + rest qnparego; parego conditions on
+    the qnehvi picks via pending so the halves don't collide."""
+    q_hv = min(q, max(0, round(hv_frac * q)))
+    q_pe = q - q_hv
+    if q_hv == 0:
+        return _qnparego(model, X, Y, bounds, q=q, seed=seed,
+                         pending=pending)
+    hv_cands = _qnehvi(model, X, Y, bounds, q=q_hv, seed=seed,
+                       pending=pending)
+    pe_pending = (torch.cat([pending, hv_cands])
+                  if pending is not None else hv_cands)
+    if q_pe == 0:
+        return hv_cands
+    pe_cands = _qnparego(model, X, Y, bounds, q=q_pe, seed=seed,
+                         pending=pe_pending)
+    return torch.cat([hv_cands, pe_cands])
+
+
+def ask(problem: Problem, X, Y, q: int = 5, picker: str = "hybrid",
+        seed: int = 0, pending=None, min_spacing: float = 0.10,
+        pool: int = 16384, hv_frac: float = 0.6) -> list:
+    """STATELESS batch proposal: fits the GP internally on every call.
+
+    seed is used verbatim in every RNG stream. n < 2 rows -> Sobol cold
+    start (never an error). int_dims are rounded in the returned lists.
+    """
+    if picker not in PICKER_CHOICES:
+        raise ValueError(f"unknown picker {picker!r}; choose from "
+                         f"{PICKER_CHOICES}")
+    bounds = bounds_tensor(problem)
+    Xt = (to_f64(X) if len(X)
+          else torch.empty((0, problem.dim), dtype=torch.float64))
+    pend = None
+    if pending:
+        pend = to_f64([[float(v) for v in row] for row in pending])
+        if pend.shape[-1] != problem.dim:
+            raise ValueError(f"pending dim {pend.shape[-1]} != problem "
+                             f"dim {problem.dim}")
+    if Xt.shape[0] < 2:
+        log.info("cold start: %d history rows < 2 -> Sobol draw "
+                 "(q=%d, seed=%d)", Xt.shape[0], q, seed)
+        return emit_picks(sobol_cold_start(bounds, q, seed),
+                          problem.int_dims)
+    Yt = to_f64(Y)
+    if Yt.ndim != 2 or Yt.shape[0] != Xt.shape[0]:
+        raise ValueError(f"Y must be 2D with {Xt.shape[0]} rows")
+    m = Yt.shape[1]
+    if picker in ("qnehvi", "qnparego", "hybrid") and m < 2:
+        raise ValueError(f"picker {picker!r} requires m >= 2 output "
+                         f"axes, got {m}")
+    if picker == "constrained_max":
+        c = problem.constraint
+        if c is None:
+            raise ValueError("constrained_max requires problem.constraint")
+        if c.axis >= m:
+            raise ValueError(f"constraint.axis {c.axis} out of range for "
+                             f"{m} output axes")
+    model = _fit_model(Xt, Yt, bounds, problem.noise)
+    if picker == "qlnei":
+        cands = _qlnei(model, Xt, bounds, q=q, seed=seed, pending=pend)
+    elif picker == "constrained_max":
+        cands = _constrained_max(model, bounds, q=q, seed=seed,
+                                 pending=pend, constraint=problem.constraint,
+                                 min_spacing=min_spacing, pool=pool)
+    elif picker == "hybrid":
+        cands = _hybrid(model, Xt, Yt, bounds, q=q, seed=seed,
+                        pending=pend, hv_frac=hv_frac)
+    elif picker == "qnparego":
+        cands = _qnparego(model, Xt, Yt, bounds, q=q, seed=seed,
+                          pending=pend)
+    else:
+        cands = _qnehvi(model, Xt, Yt, bounds, q=q, seed=seed,
+                        pending=pend)
+    return emit_picks(cands, problem.int_dims)
