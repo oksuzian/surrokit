@@ -1,7 +1,7 @@
 """Pickers: acquisition strategies over a fitted GP.
 
-All pickers return raw (q, d) tensors; ask() (Task 5) applies int-dim
-rounding via sampling.emit_picks.
+All pickers return raw (q, d) tensors; ask() applies int-dim rounding
+via sampling.emit_picks.
 """
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import torch
 
 from .gp import _fit_model, bounds_tensor, to_f64
 from .problem import Constraint, InfeasibleError, Problem
-from .sampling import (ACQ_NUM_RESTARTS, ACQ_OPTIONS, ACQ_RAW_SAMPLES,
-                       emit_picks, optimize_acq, sampler, sobol_cold_start)
+from .sampling import (emit_picks, optimize_acq, sampler,
+                       sobol_cold_start)
 
 log = logging.getLogger("surrokit")
 
@@ -161,9 +161,9 @@ def _qnparego(model, X, Y, bounds, q: int, seed: int, pending=None):
 
     Seed discipline: weights drawn inside ONE torch.manual_seed(seed)
     block -- DISTINCT per candidate, REPRODUCIBLE per seed.
-    Sequential-greedy via a growing pending set; can't use the shared
-    optimize_acq (per-candidate scalarization). pending rows are
-    conditioned on but NOT returned.
+    Sequential-greedy via a growing pending set (one q=1 optimize per
+    candidate, since the scalarization changes each time). pending rows
+    are conditioned on but NOT returned.
     """
     from botorch.acquisition.logei import qLogNoisyExpectedImprovement
     from botorch.acquisition.objective import GenericMCObjective
@@ -171,7 +171,6 @@ def _qnparego(model, X, Y, bounds, q: int, seed: int, pending=None):
         get_chebyshev_scalarization,
     )
     from botorch.utils.sampling import sample_simplex
-    from botorch.optim import optimize_acqf
 
     torch.manual_seed(seed)
     pend = [pending] if pending is not None else []
@@ -184,11 +183,10 @@ def _qnparego(model, X, Y, bounds, q: int, seed: int, pending=None):
             objective=obj, prune_baseline=True,
             X_pending=torch.cat(pend) if pend else None,
         )
-        cand, _ = optimize_acqf(
-            acq_function=acq, bounds=bounds, q=1,
-            num_restarts=ACQ_NUM_RESTARTS, raw_samples=ACQ_RAW_SAMPLES,
-            options=dict(ACQ_OPTIONS),
-        )
+        # optimize_acq passes sequential=True, which optimize_acqf only
+        # acts on when q > 1 (optimize.py: `if sequential and q > 1`) --
+        # so this is the joint q=1 path either way.
+        cand = optimize_acq(acq, bounds, q=1)
         pend.append(cand)
         picks.append(cand)
     return torch.cat(picks).detach()
