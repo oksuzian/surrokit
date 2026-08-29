@@ -6,6 +6,9 @@ with budget-constrained pickers, plus an MCP server scaffold.
 The engine sees only numbers. Every output axis is **maximized**; axis 0
 is the primary objective. Clients transform on their side (negate to
 minimize, log to tame dynamic range) and keep their units to themselves.
+It is the *ask* half of ask/tell: no optimization loop, no job
+submission, no history storage -- the client owns those and hands the
+engine the full history on every call.
 
 ## Install
 
@@ -66,6 +69,10 @@ while holding beam-flash damage under the deployed target's budget.
   — the search box. `noise` = ABSOLUTE per-axis sigma, which pins a
   fixed-noise GP; strongly recommended when you have replicate
   measurements, since a free-noise fit can erase a real optimum.
+- `Constraint(axis, min, k_sigma=1.0)` — lower bound on one output
+  axis, feasible when `mean - k_sigma*sigma >= min`. Honored ONLY by the
+  `constrained_max` picker; `fit`, `predict`, and the other pickers ignore
+  it. A GP-belief margin, not a measured one -- picks can still land over.
 - `fit(problem, X, Y) -> model`; `predict(model, X) -> (mean, sigma)`.
 - `ask(problem, X, Y, q=5, picker="hybrid", seed=0, pending=None,
   min_spacing=0.10, pool=16384, hv_frac=0.6) -> list[list]` —
@@ -138,6 +145,13 @@ Then ask it to "list the problems", "predict at x=[0.5, 5]", or "suggest
 5 points with picker qlnei, seed 7". Everything is pure computation over
 the history your adapter serves; nothing is submitted or written.
 `make_server` also takes `middleware=`, forwarded to `MCPServer`.
+
+The adapter's `problems()` dict IS the problem set: nothing outside it
+is servable, and the engine never sees your names, units, or files --
+only the `Problem` and the `X, Y` your `history()` returns. `list_problems`
+reports per problem `dims`, `bounds_lo/hi`, `int_dims`, `axes`, `n_rows`,
+and `constrained` (a `Constraint` is attached -- meaningful only under
+`constrained_max`).
 
 If your adapter also defines `suggest(name, q, picker, round_idx,
 pending)`, the suggest tool delegates to it instead of the generic
