@@ -76,3 +76,42 @@ class TestScaffold(unittest.TestCase):
 class TestLazyImport(unittest.TestCase):
     def test_surrokit_import_never_needs_mcp(self):
         import surrokit  # noqa: F401  -- must not raise even without mcp
+
+
+@unittest.skipUnless(HAVE_MCP, "mcp SDK not installed")
+class TestScaffoldSuggestHook(unittest.TestCase):
+    """An adapter with suggest() takes over the suggest tool."""
+
+    class HookAdapter(DictAdapter):
+        def suggest(self, name, q=5, picker=None, round_idx=0,
+                    pending=None):
+            self.called_with = (name, q, picker, round_idx, pending)
+            return [[0.5, 5]] * q
+
+    def setUp(self):
+        from surrokit.mcp_scaffold import make_server
+        self.adapter = self.HookAdapter()
+        self.server = make_server(self.adapter)
+
+    def test_delegates_and_speaks_round_idx(self):
+        result = asyncio.run(self.server.call_tool(
+            "suggest", {"problem": "toy", "q": 2, "picker": "budget_sob",
+                        "round_idx": 3}))
+        structured = result.structured_content
+        picks = structured["result"] if isinstance(structured, dict) else structured
+        self.assertEqual(picks, [[0.5, 5], [0.5, 5]])
+        self.assertEqual(self.adapter.called_with,
+                         ("toy", 2, "budget_sob", 3, None))
+
+    def test_unknown_problem_still_uniform_error(self):
+        with self.assertRaises(Exception) as cm:
+            asyncio.run(self.server.call_tool("suggest", {"problem": "nope"}))
+        self.assertIn("unknown problem", str(cm.exception))
+
+    def test_schema_has_round_idx_not_seed(self):
+        tools = asyncio.run(self.server.list_tools())
+        sg = next(t for t in tools if t.name == "suggest")
+        props = sg.input_schema["properties"] if hasattr(sg, "input_schema") \
+            else sg.inputSchema["properties"]
+        self.assertIn("round_idx", props)
+        self.assertNotIn("seed", props)

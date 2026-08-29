@@ -29,6 +29,12 @@ DEFAULT_INSTRUCTIONS = (
 
 
 class Adapter(Protocol):
+    """problems()/history() are required. An adapter MAY additionally
+    provide suggest(name, q, picker, round_idx, pending) -> list[list];
+    if it does, the server's suggest tool delegates to it -- the
+    adapter's own pick path, vocabulary, and seed derivation replace the
+    generic stateless ask() (use this when picks must match what the
+    client's production loop would submit)."""
     def problems(self) -> dict[str, Problem]: ...
     def history(self, name: str) -> tuple[list, list, dict]: ...
 
@@ -89,18 +95,34 @@ def make_server(adapter: Adapter, name: str = "surrokit",
         mean, sigma = gp_predict(model, points)
         return {"mean": mean.tolist(), "sigma": sigma.tolist()}
 
-    @server.tool(structured_output=True)
-    def suggest(problem: str, q: int = 5, picker: str = "hybrid",
-                seed: int = 0,
-                pending: list[list[float]] | None = None,
-                min_spacing: float = 0.10,
-                hv_frac: float = 0.6) -> list[list[float]]:
-        """Propose q new points (stateless ask over the current history).
-        pending: x-rows already in flight, to steer picks away from."""
-        prob, X, Y, _ = _resolve(problem)
-        return ask(prob, X, Y, q=q, picker=picker, seed=seed,
-                   pending=pending, min_spacing=min_spacing,
-                   hv_frac=hv_frac)
+    if hasattr(adapter, "suggest"):
+        @server.tool(structured_output=True)
+        def suggest(problem: str, q: int = 5, picker: str | None = None,
+                    round_idx: int = 0,
+                    pending: list[list[float]] | None = None,
+                    ) -> list[list[float]]:
+            """Propose q new points via the adapter's own production pick
+            path: picker vocabulary, history policy, and per-round seed
+            derivation all match the client's optimization loop, so these
+            picks are what a real round would submit. picker=None uses
+            the adapter's default. pending: x-rows already in flight."""
+            _resolve(problem)  # uniform unknown-problem error
+            return adapter.suggest(problem, q=q, picker=picker,
+                                   round_idx=round_idx, pending=pending)
+    else:
+        @server.tool(structured_output=True)
+        def suggest(problem: str, q: int = 5, picker: str = "hybrid",
+                    seed: int = 0,
+                    pending: list[list[float]] | None = None,
+                    min_spacing: float = 0.10,
+                    hv_frac: float = 0.6) -> list[list[float]]:
+            """Propose q new points (stateless ask over the current
+            history). pending: x-rows already in flight, to steer picks
+            away from."""
+            prob, X, Y, _ = _resolve(problem)
+            return ask(prob, X, Y, q=q, picker=picker, seed=seed,
+                       pending=pending, min_spacing=min_spacing,
+                       hv_frac=hv_frac)
 
     @server.tool(structured_output=True)
     def stats(problem: str) -> dict[str, Any]:

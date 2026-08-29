@@ -139,6 +139,14 @@ Then ask it to "list the problems", "predict at x=[0.5, 5]", or "suggest
 the history your adapter serves; nothing is submitted or written.
 `make_server` also takes `middleware=`, forwarded to `MCPServer`.
 
+If your adapter also defines `suggest(name, q, picker, round_idx,
+pending)`, the suggest tool delegates to it instead of the generic
+stateless `ask` -- use this when MCP picks must match your production
+loop's vocabulary, history policy, and seed derivation exactly. The
+returned server runs any transport the `mcp` SDK supports:
+`server.run("stdio")` or `server.run("streamable-http")` for a visible
+process with a URL.
+
 `examples/stopping_target.py --serve` is one of these, and the example's
 third act is a client for it. Point that client at somebody else's
 server with `--server-cmd`; add `--plot` and it Sobol-sweeps the box
