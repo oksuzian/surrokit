@@ -1,6 +1,9 @@
 import unittest
 
+import torch
+
 from surrokit import Constraint, Problem, ask
+from surrokit.pickers import emit_picks, sobol_cold_start
 from tests.common import PROB, PROB_C, history, in_bounds
 
 
@@ -92,3 +95,28 @@ class TestAskPickers(unittest.TestCase):
         picks = ask(PROB, X, Y, q=2, picker="qnehvi", seed=0,
                     pending=[[0.5, 5.0]])
         self.assertEqual(len(picks), 2)
+
+
+class TestSamplingHelpers(unittest.TestCase):
+    BOUNDS = torch.tensor([[0.0, 0.0], [1.0, 10.0]], dtype=torch.float64)
+
+    def test_cold_start_deterministic_and_in_bounds(self):
+        a = sobol_cold_start(self.BOUNDS, q=4, seed=7)
+        b = sobol_cold_start(self.BOUNDS, q=4, seed=7)
+        c = sobol_cold_start(self.BOUNDS, q=4, seed=8)
+        self.assertTrue(torch.equal(a, b))
+        self.assertFalse(torch.equal(a, c))
+        self.assertEqual(a.shape, (4, 2))
+        self.assertTrue((a >= self.BOUNDS[0]).all()
+                        and (a <= self.BOUNDS[1]).all())
+
+    def test_emit_picks_native_types_and_int_rounding(self):
+        cands = torch.tensor([[0.25, 3.6], [0.75, 7.4]], dtype=torch.float64)
+        out = emit_picks(cands, int_dims=[1])
+        self.assertEqual(out, [[0.25, 4], [0.75, 7]])
+        self.assertIsInstance(out[0][0], float)
+        self.assertIsInstance(out[0][1], int)
+
+    def test_emit_picks_no_int_dims(self):
+        cands = torch.tensor([[0.5, 1.5]], dtype=torch.float64)
+        self.assertEqual(emit_picks(cands, int_dims=[]), [[0.5, 1.5]])
