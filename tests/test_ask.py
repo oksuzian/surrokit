@@ -88,6 +88,23 @@ class TestAskPickers(unittest.TestCase):
     def test_constrained_max_through_ask(self):
         self._smoke("constrained_max")
 
+    def test_constrained_max_picks_satisfy_constraint_on_real_gp(self):
+        # Deployment-facing property, on a REAL fitted GP (the unit tests
+        # drive _constrained_max with fake posteriors): every pick's
+        # posterior must satisfy mean1 - k*sigma1 >= min at the
+        # constraint's own k (the fixture is feasible at k=1, so the
+        # relaxation ladder never fires).
+        from surrokit import fit, predict
+        X, Y = history(10)
+        picks = ask(PROB_C, X, Y, q=3, picker="constrained_max", seed=0)
+        model = fit(PROB_C, X, Y)
+        mean, sigma = predict(model, picks)
+        c = PROB_C.constraint
+        for i in range(len(picks)):
+            self.assertGreaterEqual(
+                mean[i][c.axis] - c.k_sigma * sigma[i][c.axis],
+                c.min - 1e-9)
+
     def test_seed_determinism_qlnei(self):
         X, Y = history(10)
         Y1 = [[r[0]] for r in Y]

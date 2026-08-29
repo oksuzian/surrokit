@@ -115,3 +115,30 @@ class TestScaffoldSuggestHook(unittest.TestCase):
             else sg.inputSchema["properties"]
         self.assertIn("round_idx", props)
         self.assertNotIn("seed", props)
+
+
+@unittest.skipUnless(HAVE_MCP, "mcp SDK not installed")
+class TestScaffoldFitCacheStaleness(unittest.TestCase):
+    """The fit cache keys on row COUNT (append-only assumption): an
+    in-place history rewrite at the same count serves the STALE model,
+    and refit() is the documented escape hatch."""
+
+    def setUp(self):
+        from surrokit.mcp_scaffold import make_server
+        self.adapter = DictAdapter()
+        self.server = make_server(self.adapter)
+
+    def _predict(self):
+        result = asyncio.run(self.server.call_tool(
+            "predict", {"problem": "toy", "points": [[0.5, 5.0]]}))
+        return result.structured_content["mean"]
+
+    def test_same_count_rewrite_is_stale_until_refit(self):
+        before = self._predict()
+        X, Y = self.adapter._h["toy"]
+        self.adapter._h["toy"] = (X, [[y0 + 1.0, y1] for y0, y1 in Y])
+        self.assertEqual(self._predict(), before)  # stale cache served
+        asyncio.run(self.server.call_tool("refit", {"problem": "toy"}))
+        after = self._predict()
+        self.assertNotEqual(after, before)
+        self.assertAlmostEqual(after[0][0], before[0][0] + 1.0, places=2)
