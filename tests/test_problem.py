@@ -36,3 +36,15 @@ class TestProblem(unittest.TestCase):
     def test_exception_hierarchy(self):
         self.assertTrue(issubclass(NotEnoughData, RuntimeError))
         self.assertTrue(issubclass(InfeasibleError, RuntimeError))
+
+
+class TestIntDimHasInteger(unittest.TestCase):
+    def test_no_integer_in_box_raises(self):
+        with self.assertRaisesRegex(ValueError, "no integer"):
+            Problem(bounds_lo=(0.0, 5.2), bounds_hi=(1.0, 5.8),
+                    int_dims=(1,))
+
+    def test_integer_in_box_ok(self):
+        Problem(bounds_lo=(0.0, 4.9), bounds_hi=(1.0, 5.8), int_dims=(1,))
+
+

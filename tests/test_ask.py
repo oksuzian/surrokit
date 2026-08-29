@@ -64,10 +64,15 @@ class TestAskPickers(unittest.TestCase):
     def test_qnehvi(self):
         self._smoke("qnehvi")
 
+    # 1-axis Y needs 1-sigma noise: len(noise) == m is enforced, so a
+    # client that slices Y (e.g. sob-only) slices noise with it.
+    PROB1 = Problem(bounds_lo=(0.0, 0.0), bounds_hi=(1.0, 10.0),
+                    int_dims=(1,), noise=(0.01,))
+
     def test_qlnei_accepts_1d_y(self):
         X, Y = history(10)
         Y1 = [[r[0]] for r in Y]
-        picks = ask(PROB, X, Y1, q=2, picker="qlnei", seed=0)
+        picks = ask(self.PROB1, X, Y1, q=2, picker="qlnei", seed=0)
         self.assertEqual(len(picks), 2)
 
     def test_qnparego(self):
@@ -86,8 +91,8 @@ class TestAskPickers(unittest.TestCase):
     def test_seed_determinism_qlnei(self):
         X, Y = history(10)
         Y1 = [[r[0]] for r in Y]
-        a = ask(PROB, X, Y1, q=2, picker="qlnei", seed=9)
-        b = ask(PROB, X, Y1, q=2, picker="qlnei", seed=9)
+        a = ask(self.PROB1, X, Y1, q=2, picker="qlnei", seed=9)
+        b = ask(self.PROB1, X, Y1, q=2, picker="qlnei", seed=9)
         self.assertEqual(a, b)
 
     def test_pending_accepted(self):
@@ -112,11 +117,20 @@ class TestSamplingHelpers(unittest.TestCase):
 
     def test_emit_picks_native_types_and_int_rounding(self):
         cands = torch.tensor([[0.25, 3.6], [0.75, 7.4]], dtype=torch.float64)
-        out = emit_picks(cands, int_dims=[1])
+        out = emit_picks(cands, PROB)
         self.assertEqual(out, [[0.25, 4], [0.75, 7]])
         self.assertIsInstance(out[0][0], float)
         self.assertIsInstance(out[0][1], int)
 
     def test_emit_picks_no_int_dims(self):
+        prob = Problem(bounds_lo=(0.0, 0.0), bounds_hi=(1.0, 10.0))
         cands = torch.tensor([[0.5, 1.5]], dtype=torch.float64)
-        self.assertEqual(emit_picks(cands, int_dims=[]), [[0.5, 1.5]])
+        self.assertEqual(emit_picks(cands, prob), [[0.5, 1.5]])
+
+    def test_emit_picks_clamps_rounded_int_into_box(self):
+        # Rounding alone exits a non-integral bound: 5.7 -> 6 > hi=5.7,
+        # 0.4 -> 0 < lo=0.6. Clamp makes in-box a postcondition.
+        prob = Problem(bounds_lo=(0.0, 0.6), bounds_hi=(1.0, 5.7),
+                       int_dims=(1,))
+        cands = torch.tensor([[0.5, 5.7], [0.5, 0.7]], dtype=torch.float64)
+        self.assertEqual(emit_picks(cands, prob), [[0.5, 5], [0.5, 1]])

@@ -72,7 +72,9 @@ while holding beam-flash damage under the deployed target's budget.
   **stateless**: refits per call. Pickers: `qnehvi | qlnei | qnparego |
   hybrid | constrained_max`. `seed` is used verbatim in every RNG stream
   (derive per-round seeds on your side). Fewer than 2 rows falls back to
-  a Sobol draw. `pending` rows are conditioned on but never returned.
+  a Sobol draw. `pending` rows are conditioned on but never returned. `ask` seeds
+  torch's GLOBAL RNG (`torch.manual_seed`) for stateless determinism;
+  reseed after the call if you rely on ambient torch RNG state.
 - Errors: `InfeasibleError`, `NotEnoughData`, `ValueError` — the library
   never prints (logger `"surrokit"`), reads the environment, or exits.
 

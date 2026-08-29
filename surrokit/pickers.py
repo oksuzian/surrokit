@@ -8,6 +8,7 @@ their side before calling.
 from __future__ import annotations
 
 import logging
+import math
 
 import torch
 
@@ -56,16 +57,25 @@ def sobol_cold_start(bounds: torch.Tensor, q: int, seed: int) -> torch.Tensor:
     return cands.detach()
 
 
-def emit_picks(cands: torch.Tensor, int_dims) -> list:
-    """Cast a (q, d) tensor to native-typed lists (int_dims rounded).
+def emit_picks(cands: torch.Tensor, problem: Problem) -> list:
+    """Cast a (q, d) tensor to native-typed lists; int dims are rounded
+    and clamped into the box -- in-box picks are a postcondition of ask()
+    (rounding alone can exit a non-integral bound, e.g. 5.7 -> 6 > hi=5.7).
 
     Native Python types only, so results survive any JSON/msgpack layer.
     """
-    int_set = set(int_dims)
+    int_set = set(problem.int_dims)
+    lo, hi = problem.bounds_lo, problem.bounds_hi
     out = []
     for row in cands.cpu().numpy().tolist():
-        out.append([int(round(v)) if i in int_set else float(v)
-                    for i, v in enumerate(row)])
+        vals = []
+        for i, v in enumerate(row):
+            if i in int_set:
+                vals.append(min(max(int(round(v)), math.ceil(lo[i])),
+                                math.floor(hi[i])))
+            else:
+                vals.append(float(v))
+        out.append(vals)
     return out
 
 
@@ -289,8 +299,7 @@ def ask(problem: Problem, X, Y, q: int = 5, picker: str = "hybrid",
     if Xt.shape[0] < 2:
         log.info("cold start: %d history rows < 2 -> Sobol draw "
                  "(q=%d, seed=%d)", Xt.shape[0], q, seed)
-        return emit_picks(sobol_cold_start(bounds, q, seed),
-                          problem.int_dims)
+        return emit_picks(sobol_cold_start(bounds, q, seed), problem)
     Yt = to_f64(Y)
     m = Yt.shape[1] if Yt.ndim == 2 else 0
     if picker in ("qnehvi", "qnparego", "hybrid") and m < 2:
@@ -315,4 +324,4 @@ def ask(problem: Problem, X, Y, q: int = 5, picker: str = "hybrid",
     else:
         cands = _qnehvi(model, Xt, Yt, bounds, q=q, seed=seed,
                         pending=pend)
-    return emit_picks(cands, problem.int_dims)
+    return emit_picks(cands, problem)

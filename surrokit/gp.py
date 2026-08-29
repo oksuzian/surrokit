@@ -41,6 +41,9 @@ def fit(problem: Problem, X, Y):
     if problem.constraint is not None and problem.constraint.axis >= Yt.shape[1]:
         raise ValueError(f"constraint.axis {problem.constraint.axis} out of "
                          f"range for {Yt.shape[1]} output axes")
+    if problem.noise is not None and len(problem.noise) != Yt.shape[1]:
+        raise ValueError(f"noise has {len(problem.noise)} sigmas but Y has "
+                         f"{Yt.shape[1]} output axes")
     if Xt.shape[0] < 2:
         raise NotEnoughData(f"{Xt.shape[0]} history rows; need >= 2 to fit")
     return _fit_model(Xt, Yt, bounds_tensor(problem), problem.noise)
@@ -65,7 +68,7 @@ def _fit_model(X, Y, bounds, noise):
     if noise is not None:
         # Broadcast sigma^2 across rows: noise is a property of the
         # client's measurement budget, not the point.
-        sig = torch.tensor([float(v) for v in noise[:m]],
+        sig = torch.tensor([float(v) for v in noise],
                            dtype=Y.dtype, device=Y.device)
         train_Yvar = (sig ** 2).expand(Y.shape[0], m).contiguous()
 

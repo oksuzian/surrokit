@@ -6,6 +6,7 @@ their side and keep their units to themselves.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 
@@ -58,6 +59,10 @@ class Problem:
             if not 0 <= i < len(self.bounds_lo):
                 raise ValueError(f"int_dim {i} out of range for "
                                  f"{len(self.bounds_lo)}D bounds")
+            if math.floor(self.bounds_hi[i]) < math.ceil(self.bounds_lo[i]):
+                raise ValueError(
+                    f"int_dim {i}: no integer in [{self.bounds_lo[i]}, "
+                    f"{self.bounds_hi[i]}]")
 
     @property
     def dim(self) -> int:

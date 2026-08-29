@@ -69,3 +69,16 @@ class TestFit(unittest.TestCase):
         mean, _ = predict(model, X)
         for i in range(len(X)):
             self.assertAlmostEqual(mean[i][0], Y[i][0], delta=0.05)
+
+
+class TestNoiseLengthValidation(unittest.TestCase):
+    def test_noise_length_mismatch_raises(self):
+        from tests.common import history
+        X, Y = history(6)  # m = 2
+        for bad in ((0.01,), (0.01, 0.01, 0.01)):
+            prob = Problem(bounds_lo=(0.0, 0.0), bounds_hi=(1.0, 10.0),
+                           noise=bad)
+            with self.assertRaisesRegex(ValueError, "sigmas"):
+                fit(prob, X, Y)
+
+
