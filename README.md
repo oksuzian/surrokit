@@ -44,10 +44,9 @@ site-packages and libs into every child process and shadow muse's ROOT.
 
 ```bash
 git clone https://github.com/oksuzian/surrokit && cd surrokit
-python examples/bo_loop.py         # ask/tell loop climbs to a toy optimum
-python examples/stopping_target.py  # the budget recipe on 90 real designs
+python examples/stopping_target.py     # the engine on 90 real designs
 python examples/gp_map.py --problem toy \
-    --cmd python examples/toy_server.py    # GP map over a toy MCP server
+    --cmd python examples/toy_server.py    # the MCP scaffold, end to end
 ```
 
 `stopping_target.py` is the honest end-to-end case: 90 Geant4-simulated
@@ -55,6 +54,9 @@ Mu2e stopping-target geometries (10 knobs), maximizing signal-to-
 background while holding beam-flash damage under the deployed target's
 budget. The best measured design is over budget; `constrained_max`
 proposes the highest-signal geometries the GP believes stay under it.
+
+`examples/bo_loop.py` is the shortest thing that runs: the same `ask`
+against a toy function, in a real ask/tell loop with no data file.
 
 ## API
 
