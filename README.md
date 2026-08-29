@@ -39,24 +39,26 @@ site-packages and libs into every child process and shadow muse's ROOT.
 
 ## Quickstart
 
-`pip install` ships the package only, so the examples come from a clone
-(they run straight from it, installed or not):
+`pip install` ships the package only, so the example comes from a clone
+(it runs straight from it, installed or not):
 
 ```bash
 git clone https://github.com/oksuzian/surrokit && cd surrokit
-python examples/stopping_target.py     # the engine on 90 real designs
-python examples/gp_map.py --problem toy \
-    --cmd python examples/toy_server.py    # the MCP scaffold, end to end
+python examples/stopping_target.py           # the whole library, one run
+python examples/stopping_target.py --plot    # + the GP map as a PNG
 ```
 
-`stopping_target.py` is the honest end-to-end case: 90 Geant4-simulated
-Mu2e stopping-target geometries (10 knobs), maximizing signal-to-
-background while holding beam-flash damage under the deployed target's
-budget. The best measured design is over budget; `constrained_max`
-proposes the highest-signal geometries the GP believes stay under it.
+One example, three acts on real data: 90 Geant4-simulated Mu2e
+stopping-target geometries (10 knobs), maximizing signal-to-background
+while holding beam-flash damage under the deployed target's budget.
 
-`examples/bo_loop.py` is the shortest thing that runs: the same `ask`
-against a toy function, in a real ask/tell loop with no data file.
+1. `fit` / `predict` — the GP over the measured designs.
+2. `ask` — what to simulate next. The best measured design is over
+   budget; `constrained_max` proposes the highest-signal geometries the
+   GP believes stay under it.
+3. MCP — the same two problems served over stdio (the script re-runs
+   itself with `--serve`) and called back by a client. `suggest` returns
+   the picks act 2 computed in-process, byte for byte.
 
 ## API
 
@@ -135,8 +137,10 @@ Then ask it to "list the problems", "predict at x=[0.5, 5]", or "suggest
 the history your adapter serves; nothing is submitted or written.
 `make_server` also takes `middleware=`, forwarded to `MCPServer`.
 
-`examples/gp_map.py` is a ready-made client for any such server: it
-Sobol-sweeps the box through `predict` and plots the GP's trade-off map.
+`examples/stopping_target.py --serve` is one of these, and the example's
+third act is a client for it. Point that client at somebody else's
+server with `--server-cmd`; add `--plot` and it Sobol-sweeps the box
+through `predict` and draws the GP's trade-off map.
 [Mu2eBO](https://github.com/Mu2e/Mu2eBO) is the real-world adapter —
 `surrogate/adapter.py` + `surrogate/mcp_server.py` serve its Bayesian
 optimization leaderboards (7 detector-geometry search spaces) this way.
