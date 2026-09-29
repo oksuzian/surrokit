@@ -308,7 +308,7 @@ def ask(problem: Problem, X, Y, q: int = 5, picker: str = "hybrid",
     if picker == "constrained_max" and problem.constraint is None:
         raise ValueError("constrained_max requires problem.constraint")
     # All shape/constraint validation lives in fit().
-    model = fit(problem, X, Y)
+    model = fit(problem, Xt, Yt)
     if picker == "qlnei":
         cands = _qlnei(model, Xt, bounds, q=q, seed=seed, pending=pend)
     elif picker == "constrained_max":
