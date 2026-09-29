@@ -24,6 +24,12 @@ ACQ_NUM_RESTARTS = 16
 ACQ_RAW_SAMPLES = 512
 ACQ_OPTIONS = {"batch_limit": 5, "maxiter": 200}
 
+# Defaults shared by ask(), its helpers and the MCP scaffold's stateless
+# suggest tool -- one home, so the wire schema cannot drift from ask().
+DEFAULT_MIN_SPACING = 0.10
+DEFAULT_HV_FRAC = 0.6
+DEFAULT_POOL = 16384
+
 
 def sampler(seed: int):
     """The shared qMC sampler all acquisition pickers use."""
@@ -80,8 +86,9 @@ def emit_picks(cands: torch.Tensor, problem: Problem) -> list:
 
 
 def _constrained_max(model, bounds, q: int, seed: int, pending,
-                     constraint: Constraint, min_spacing: float = 0.10,
-                     pool: int = 16384) -> torch.Tensor:
+                     constraint: Constraint,
+                     min_spacing: float = DEFAULT_MIN_SPACING,
+                     pool: int = DEFAULT_POOL) -> torch.Tensor:
     """The q highest-axis-0 points the GP believes satisfy the constraint.
 
     Feasibility is mean[axis] - k_sigma*sigma[axis] >= min -- k-sigma,
@@ -253,7 +260,7 @@ def _qnparego(model, X, Y, bounds, q: int, seed: int, pending=None):
 
 
 def _hybrid(model, X, Y, bounds, q: int, seed: int, pending=None,
-            hv_frac: float = 0.6):
+            hv_frac: float = DEFAULT_HV_FRAC):
     """One batch = hv_frac qnehvi + rest qnparego; parego conditions on
     the qnehvi picks via pending so the halves don't collide."""
     q_hv = min(q, max(0, round(hv_frac * q)))
@@ -273,8 +280,9 @@ def _hybrid(model, X, Y, bounds, q: int, seed: int, pending=None,
 
 
 def ask(problem: Problem, X, Y, q: int = 5, picker: str = "hybrid",
-        seed: int = 0, pending=None, min_spacing: float = 0.10,
-        pool: int = 16384, hv_frac: float = 0.6) -> list:
+        seed: int = 0, pending=None,
+        min_spacing: float = DEFAULT_MIN_SPACING, pool: int = DEFAULT_POOL,
+        hv_frac: float = DEFAULT_HV_FRAC) -> list:
     """STATELESS batch proposal: fits the GP internally on every call.
 
     seed is used verbatim in every RNG stream. n < 2 rows -> Sobol cold

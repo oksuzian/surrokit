@@ -15,7 +15,8 @@ except ImportError as e:  # pragma: no cover
         'pip install "mcp>=2.0"') from e
 
 from .gp import fit, predict as gp_predict
-from .pickers import PICKER_CHOICES, ask
+from .pickers import (DEFAULT_HV_FRAC, DEFAULT_MIN_SPACING, PICKER_CHOICES,
+                      ask)
 from .problem import Problem
 
 DEFAULT_INSTRUCTIONS = (
@@ -114,8 +115,8 @@ def make_server(adapter: Adapter, name: str = "surrokit",
         def suggest(problem: str, q: int = 5, picker: str = "hybrid",
                     seed: int = 0,
                     pending: list[list[float]] | None = None,
-                    min_spacing: float = 0.10,
-                    hv_frac: float = 0.6) -> list[list[float]]:
+                    min_spacing: float = DEFAULT_MIN_SPACING,
+                    hv_frac: float = DEFAULT_HV_FRAC) -> list[list[float]]:
             """Propose q new points (stateless ask over the current
             history). pending: x-rows already in flight, to steer picks
             away from."""
